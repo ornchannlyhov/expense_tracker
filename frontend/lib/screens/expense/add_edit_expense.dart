@@ -63,7 +63,9 @@ class _AddEditExpenseScreenState extends State<AddEditExpenseScreen> {
               onPrimary: Colors.white,
               surface: Theme.of(context).colorScheme.surface,
               onSurface: Theme.of(context).colorScheme.onSurface,
-            ), dialogTheme: DialogThemeData(backgroundColor: Theme.of(context).colorScheme.surface),
+            ),
+            dialogTheme: DialogThemeData(
+                backgroundColor: Theme.of(context).colorScheme.surface),
           ),
           child: child!,
         );
@@ -96,6 +98,12 @@ class _AddEditExpenseScreenState extends State<AddEditExpenseScreen> {
       notes: notes.isEmpty ? null : notes,
     );
 
+    if (_isEditMode) {
+      expenseService.updateExpenseOptimistic(expenseData);
+    } else {
+      expenseService.addExpenseOptimistic(expenseData);
+    }
+
     bool success = _isEditMode
         ? await expenseService.updateExpense(expenseData)
         : await expenseService.addExpense(expenseData);
@@ -106,6 +114,11 @@ class _AddEditExpenseScreenState extends State<AddEditExpenseScreen> {
     if (success) {
       Navigator.of(context).pop(true);
     } else if (expenseService.errorMessage != null) {
+      if (_isEditMode && widget.expenseToEdit != null) {
+        expenseService.updateExpenseOptimistic(widget.expenseToEdit!);
+      } else {
+        expenseService.removeExpenseOptimistic(expenseData.id ?? 0);
+      }
       _showErrorSnackbar(expenseService.errorMessage!);
     }
   }
@@ -158,20 +171,19 @@ class _AddEditExpenseScreenState extends State<AddEditExpenseScreen> {
         ],
       ),
     );
-
     if (confirm == true) {
       setState(() => _isSubmitting = true);
       final expenseService =
           Provider.of<ExpenseService>(context, listen: false);
+      expenseService.removeExpenseOptimistic(widget.expenseToEdit!.id!);
       final success =
           await expenseService.deleteExpense(widget.expenseToEdit!.id!);
-
       if (!mounted) return;
       setState(() => _isSubmitting = false);
-
       if (success) {
-        Navigator.of(context).pop(); 
+        Navigator.of(context).pop();
       } else {
+        expenseService.addExpenseOptimistic(widget.expenseToEdit!);
         _showErrorSnackbar(
             expenseService.errorMessage ?? 'Failed to delete expense');
       }

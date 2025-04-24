@@ -43,4 +43,25 @@ class Expense {
   String get formattedDate => DateFormat(kDisplayDateFormat).format(date);
   String get formattedAmount =>
       NumberFormat.currency(symbol: '\$', decimalDigits: 2).format(amount);
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Expense &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          userId == other.userId &&
+          amount == other.amount &&
+          category == other.category &&
+          date == other.date &&
+          notes == other.notes;
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      userId.hashCode ^
+      amount.hashCode ^
+      category.hashCode ^
+      date.hashCode ^
+      notes.hashCode;
 }

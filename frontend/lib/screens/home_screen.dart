@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/main.dart';
 import 'package:frontend/screens/expense/add_edit_expense.dart';
 import 'package:frontend/screens/expense/expense_detail.dart';
-import 'package:frontend/screens/expense/expense_list_screen.dart';
 import 'package:frontend/screens/expense/monthly_analytics_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -24,6 +24,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   DateTime _selectedMonth =
       DateTime(DateTime.now().year, DateTime.now().month, 1);
+  bool _isInitialLoad = true;
 
   @override
   void initState() {
@@ -32,28 +33,37 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _fetchInitialData() async {
-    await Provider.of<ExpenseService>(context, listen: false)
-        .fetchExpenses(year: _selectedMonth.year, month: _selectedMonth.month);
+    final service = Provider.of<ExpenseService>(context, listen: false);
+    await service.fetchExpenses(
+      year: _selectedMonth.year,
+      month: _selectedMonth.month,
+      forceRefresh: true,
+    );
+    _isInitialLoad = false;
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final service = Provider.of<ExpenseService>(context, listen: false);
+    if (!_isInitialLoad && service.needsRefresh) {
+      _fetchData();
+    }
+  }
+
+  Future<void> _fetchData() async {
+    await Provider.of<ExpenseService>(context, listen: false).fetchExpenses(
+      year: _selectedMonth.year,
+      month: _selectedMonth.month,
+    );
   }
 
   void _onMonthChanged(DateTime newMonth) {
     setState(() => _selectedMonth = newMonth);
-    Provider.of<ExpenseService>(context, listen: false)
-        .fetchExpenses(year: newMonth.year, month: newMonth.month);
-  }
-
-  Future<void> _navigateToAddExpense() async {
-    await Navigator.of(context).pushNamed(AddEditExpenseScreen.routeName);
-  }
-
-  Future<void> _navigateToExpenseList() async {
-    await Navigator.of(context).pushNamed(ExpenseListScreen.routeName);
-  }
-
-  Future<void> _navigateToDetailScreen(Expense expense) async {
-    await Navigator.of(context).pushNamed(
-      ExpenseDetailScreen.routeName,
-      arguments: expense,
+    Provider.of<ExpenseService>(context, listen: false).fetchExpenses(
+      year: newMonth.year,
+      month: newMonth.month,
+      forceRefresh: true,
     );
   }
 
@@ -66,6 +76,30 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) {
       Navigator.of(context)
           .pushNamedAndRemoveUntil(LoginScreen.routeName, (_) => false);
+    }
+  }
+
+  Future<void> _manualRefresh() async {
+    final expenseService = Provider.of<ExpenseService>(context, listen: false);
+    await expenseService.fetchExpenses(
+      year: _selectedMonth.year,
+      month: _selectedMonth.month,
+      forceRefresh: true,
+    );
+  }
+
+  Future<void> _navigateToAddExpense() async {
+    await Navigator.of(context).pushNamed(AddEditExpenseScreen.routeName);
+    await _manualRefresh();
+  }
+
+  Future<void> _navigateToDetailScreen(Expense expense) async {
+    final result = await Navigator.of(context).pushNamed(
+      ExpenseDetailScreen.routeName,
+      arguments: expense,
+    );
+    if (result == true) {
+      await _manualRefresh();
     }
   }
 
@@ -87,6 +121,22 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         elevation: 0,
         actions: [
+          Consumer<ThemeNotifier>(
+            builder: (context, themeNotifier, child) {
+              return IconButton(
+                icon: Icon(themeNotifier.isDarkMode
+                    ? Icons.light_mode
+                    : Icons.dark_mode),
+                onPressed: () => themeNotifier.toggleTheme(),
+                tooltip: 'Toggle theme',
+              );
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+            onPressed: _manualRefresh,
+          ),
           IconButton(
             icon: const Icon(Icons.logout_outlined),
             tooltip: 'Logout',
@@ -96,11 +146,18 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Consumer<ExpenseService>(
         builder: (context, expenseService, child) {
+          if (!expenseService.needsRefresh &&
+              expenseService.lastUpdated != null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              expenseService.markDataAsFresh();
+            });
+          }
+
           final expenses = expenseService.getExpensesForMonth(
               _selectedMonth.year, _selectedMonth.month);
           final totalSpending = expenses.fold<double>(
               0.0, (sum, e) => sum + (e.amount > 0 ? e.amount : 0));
-          final recentExpenses = expenses.take(5).toList();
+          final recentExpenses = expenses.toList();
 
           return RefreshIndicator(
             onRefresh: () => expenseService.fetchExpenses(
@@ -178,17 +235,19 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 24),
                   if (expenseService.isLoading && expenses.isEmpty)
                     const SizedBox(
-                        height: 200,
-                        child: Center(child: CircularProgressIndicator()))
+                      height: 200,
+                      child: Center(child: CircularProgressIndicator()),
+                    )
                   else if (expenses.isEmpty)
                     const SizedBox(
-                        height: 200,
-                        child: Center(
-                          child: Text(
-                            'No expenses this month',
-                            style: TextStyle(fontSize: 16),
-                          ),
-                        ))
+                      height: 200,
+                      child: Center(
+                        child: Text(
+                          'No expenses this month',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    )
                   else ...[
                     const SizedBox(height: 8),
                     Row(
@@ -198,20 +257,23 @@ class _HomeScreenState extends State<HomeScreen> {
                           'Recent Expenses',
                           style: theme.textTheme.titleLarge,
                         ),
-                        TextButton(
-                          onPressed: _navigateToExpenseList,
-                          child: const Text('View All'),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    ...recentExpenses.map((exp) => Padding(
+                    ...List.generate(
+                      recentExpenses.length,
+                      (index) {
+                        final expense = recentExpenses[index];
+                        return Padding(
                           padding: const EdgeInsets.only(bottom: 2),
                           child: ExpenseCard(
-                            expense: exp,
-                            onTap: () => _navigateToDetailScreen(exp),
+                            key: ValueKey(expense.id),
+                            expense: expense,
+                            onTap: () => _navigateToDetailScreen(expense),
                           ),
-                        )),
+                        );
+                      },
+                    ),
                   ],
                 ],
               ),

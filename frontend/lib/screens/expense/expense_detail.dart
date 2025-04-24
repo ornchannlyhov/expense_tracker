@@ -1,5 +1,3 @@
-// ignore_for_file: deprecated_member_use
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -21,10 +19,15 @@ class ExpenseDetailScreen extends StatefulWidget {
 class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
   bool _isDeleting = false;
 
-  void _navigateToEditScreen() => Navigator.of(context).pushReplacementNamed(
-        AddEditExpenseScreen.routeName,
-        arguments: widget.expense,
-      );
+  Future<void> _navigateToEditScreen() async {
+    final result = await Navigator.of(context).pushNamed(
+      AddEditExpenseScreen.routeName,
+      arguments: widget.expense,
+    );
+    if (result == true && mounted) {
+      Navigator.of(context).pop(true);
+    }
+  }
 
   Future<void> _confirmDelete() async {
     final expenseService = context.read<ExpenseService>();
@@ -32,7 +35,8 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Expense?'),
-        content: Text('This will permanently delete "${widget.expense.category}" expense.'),
+        content: Text(
+            'This will permanently delete "${widget.expense.category}" expense.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
@@ -60,12 +64,13 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
       try {
         final success = await expenseService.deleteExpense(widget.expense.id!);
         if (!mounted) return;
-        
+
         if (success) {
           _showSuccessSnackbar('Expense deleted successfully');
-          Navigator.of(context).pop();
+          Navigator.of(context).pop(true);
         } else {
-          _showErrorSnackbar(expenseService.errorMessage ?? 'Failed to delete expense');
+          _showErrorSnackbar(
+              expenseService.errorMessage ?? 'Failed to delete expense');
         }
       } finally {
         if (mounted) {
@@ -105,25 +110,13 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    final dateFormatted = DateFormat('EEEE, MMMM d, y').format(widget.expense.date);
+    final dateFormatted =
+        DateFormat('EEEE, MMMM d, y').format(widget.expense.date);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.expense.category),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            onPressed: _isDeleting ? null : _navigateToEditScreen,
-            tooltip: 'Edit',
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            onPressed: _isDeleting ? null : _confirmDelete,
-            tooltip: 'Delete',
-            color: colorScheme.error,
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -155,7 +148,7 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
                       ),
                     ),
                     const Divider(height: 24, thickness: 1),
-                    
+
                     // Category
                     _buildDetailItem(
                       context,
@@ -165,7 +158,7 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
                       valueStyle: theme.textTheme.titleLarge,
                     ),
                     const Divider(height: 24, thickness: 1),
-                    
+
                     // Date
                     _buildDetailItem(
                       context,
@@ -175,7 +168,7 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
                       valueStyle: theme.textTheme.titleMedium,
                     ),
                     const Divider(height: 24, thickness: 1),
-                    
+
                     // Notes
                     _buildDetailItem(
                       context,
@@ -196,9 +189,9 @@ class _ExpenseDetailScreenState extends State<ExpenseDetailScreen> {
                 ),
               ),
             ),
-            
+
             const SizedBox(height: 24),
-            
+
             // Action Buttons
             if (_isDeleting)
               const CircularProgressIndicator()

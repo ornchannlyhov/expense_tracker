@@ -9,11 +9,14 @@ class ExpenseService with ChangeNotifier {
   bool _isLoading = false;
   String? _errorMessage;
   DateTime? _lastUpdated;
+  DateTime? _lastFetchTime;
+  bool _needsRefresh = true;
 
   List<Expense> get expenses => List.unmodifiable(_expenses);
   bool get isLoading => _isLoading;
   String? get errorMessage => _errorMessage;
   DateTime? get lastUpdated => _lastUpdated;
+  bool get needsRefresh => _needsRefresh;
 
   List<Expense> getExpensesForMonth(int year, int month) => _expenses
       .where((e) => e.date.year == year && e.date.month == month)
@@ -24,9 +27,11 @@ class ExpenseService with ChangeNotifier {
     String? error,
     List<Expense>? newExpenses,
     bool notify = true,
+    bool needsRefresh = false,
   }) {
     _isLoading = loading;
     _errorMessage = error;
+    _needsRefresh = needsRefresh;
     if (newExpenses != null) {
       _expenses = newExpenses..sort((a, b) => b.date.compareTo(a.date));
       _lastUpdated = DateTime.now();
@@ -36,7 +41,14 @@ class ExpenseService with ChangeNotifier {
 
   Future<void> fetchExpenses(
       {int? year, int? month, bool forceRefresh = false}) async {
-    if (!forceRefresh && _expenses.isNotEmpty && !_isLoading) {
+    // Debounce rapid requests
+    if (!forceRefresh &&
+        _lastFetchTime != null &&
+        DateTime.now().difference(_lastFetchTime!) < Duration(seconds: 1)) {
+      return;
+    }
+
+    if (!forceRefresh && !_needsRefresh && _expenses.isNotEmpty) {
       return;
     }
 
@@ -49,9 +61,6 @@ class ExpenseService with ChangeNotifier {
       final response = await _dio.get(
         '/expenses',
         queryParameters: queryParams.isNotEmpty ? queryParams : null,
-        options: Options(
-          extra: {'refresh': forceRefresh},
-        ),
       );
 
       if (response.statusCode == 200 && response.data != null) {
@@ -59,7 +68,9 @@ class ExpenseService with ChangeNotifier {
         _setState(
           loading: false,
           newExpenses: data.map((json) => Expense.fromJson(json)).toList(),
+          needsRefresh: false,
         );
+        _lastFetchTime = DateTime.now();
       } else {
         throw DioException(
           requestOptions: response.requestOptions,
@@ -84,6 +95,7 @@ class ExpenseService with ChangeNotifier {
         _setState(
           loading: false,
           newExpenses: List<Expense>.from(_expenses)..insert(0, newExpense),
+          needsRefresh: true, 
         );
         return true;
       } else {
@@ -106,6 +118,17 @@ class ExpenseService with ChangeNotifier {
 
     _setState(loading: true, error: null, notify: false);
     try {
+      final index = _expenses.indexWhere((e) => e.id == expense.id);
+      if (index != -1) {
+        final updatedList = List<Expense>.from(_expenses);
+        updatedList[index] = expense;
+        _setState(
+          newExpenses: updatedList,
+          needsRefresh: true,
+          notify: true,
+        );
+      }
+
       final response = await _dio.put(
         '/expenses/${expense.id}',
         data: expense.toJson(),
@@ -113,17 +136,31 @@ class ExpenseService with ChangeNotifier {
 
       if (response.statusCode == 200) {
         final updatedExpense = Expense.fromJson(response.data['data']);
-        final index = _expenses.indexWhere((e) => e.id == expense.id);
+        final newIndex = _expenses.indexWhere((e) => e.id == expense.id);
 
-        if (index != -1) {
+        if (newIndex != -1) {
           final updatedList = List<Expense>.from(_expenses);
-          updatedList[index] = updatedExpense;
-          _setState(loading: false, newExpenses: updatedList);
+          updatedList[newIndex] = updatedExpense;
+          _setState(
+            loading: false,
+            newExpenses: updatedList,
+            needsRefresh: true,
+          );
         } else {
           await fetchExpenses(forceRefresh: true);
         }
         return true;
       } else {
+        if (index != -1) {
+          final originalExpense = _expenses[index];
+          final revertedList = List<Expense>.from(_expenses);
+          revertedList[index] = originalExpense;
+          _setState(
+            loading: false,
+            newExpenses: revertedList,
+            needsRefresh: true,
+          );
+        }
         throw DioException(
           requestOptions: response.requestOptions,
           response: response,
@@ -145,6 +182,7 @@ class ExpenseService with ChangeNotifier {
           loading: false,
           newExpenses: List<Expense>.from(_expenses)
             ..removeWhere((e) => e.id == expenseId),
+          needsRefresh: true,
         );
         return true;
       } else {
@@ -207,10 +245,11 @@ class ExpenseService with ChangeNotifier {
     return 'An unexpected error occurred: ${e.toString()}';
   }
 
-  // Optimistic update methods for better UX
+  // Optimistic update methods
   void addExpenseOptimistic(Expense expense) {
     _setState(
       newExpenses: List<Expense>.from(_expenses)..insert(0, expense),
+      needsRefresh: true,
       notify: true,
     );
   }
@@ -220,7 +259,11 @@ class ExpenseService with ChangeNotifier {
     if (index != -1) {
       final updatedList = List<Expense>.from(_expenses);
       updatedList[index] = expense;
-      _setState(newExpenses: updatedList, notify: true);
+      _setState(
+        newExpenses: updatedList,
+        needsRefresh: true,
+        notify: true,
+      );
     }
   }
 
@@ -228,7 +271,13 @@ class ExpenseService with ChangeNotifier {
     _setState(
       newExpenses: List<Expense>.from(_expenses)
         ..removeWhere((e) => e.id == expenseId),
+      needsRefresh: true,
       notify: true,
     );
+  }
+
+  void markDataAsFresh() {
+    _needsRefresh = false;
+    notifyListeners();
   }
 }

@@ -1,70 +1,106 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/services/expense_service.dart';
+import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../models/expense.dart';
-import '../utils/constants.dart';
 
-class ExpenseCard extends StatelessWidget {
+class ExpenseCard extends StatefulWidget {
   final Expense expense;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
 
-  const ExpenseCard({super.key, required this.expense, this.onTap});
+  const ExpenseCard({
+    super.key,
+    required this.expense,
+    required this.onTap,
+  });
 
+  @override
+  State<ExpenseCard> createState() => _ExpenseCardState();
+}
+
+class _ExpenseCardState extends State<ExpenseCard> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final expense = widget.expense;
+
     return Card(
-      margin: const EdgeInsets.symmetric(
-          vertical: 6.0, horizontal: kDefaultPadding * 0.5),
-      elevation: 1,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      elevation: 0,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: theme.colorScheme.outline.withOpacity(0.1),
+          width: 1,
+        ),
+      ),
       child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
+        onTap: widget.onTap,
         child: Padding(
-          padding: const EdgeInsets.all(kDefaultPadding * 0.75),
+          padding: const EdgeInsets.all(16),
           child: Row(
             children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  _getCategoryIcon(expense.category),
+                  color: theme.colorScheme.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 16),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(expense.category,
-                        style: theme.textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                        overflow: TextOverflow.ellipsis),
+                    Text(
+                      expense.category,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     if (expense.notes != null && expense.notes!.isNotEmpty)
                       Padding(
-                        padding: const EdgeInsets.only(top: 4.0),
-                        child: Text(expense.notes!,
-                            style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.textTheme.bodySmall?.color
-                                    ?.withOpacity(0.7)),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis),
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          expense.notes!,
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onSurface.withOpacity(0.6),
+                          ),
+                        ),
                       ),
                   ],
                 ),
               ),
-              const SizedBox(width: kDefaultPadding),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(expense.formattedAmount,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: expense.amount >= 0
-                              ? Colors.green.shade600
-                              : Colors.redAccent)),
-                  const SizedBox(height: 4),
-                  Text(expense.formattedDate,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.textTheme.bodySmall?.color
-                              ?.withOpacity(0.7))),
-                ],
+              Consumer<ExpenseService>(
+                builder: (context, service, child) {
+                  // This ensures the amount updates when the expense changes
+                  final updatedExpense = service.expenses.firstWhere(
+                    (e) => e.id == expense.id,
+                    orElse: () => expense,
+                  );
+                  return Text(
+                    NumberFormat.currency(symbol: '\$', decimalDigits: 2)
+                        .format(updatedExpense.amount),
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  );
+                },
               ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  IconData _getCategoryIcon(String category) {
+    return Icons.receipt;
   }
 }

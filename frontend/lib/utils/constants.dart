@@ -26,6 +26,6 @@ const String splashRoute = '/splash';
 const String loginRoute = '/auth/login';
 const String registerRoute = '/auth/register';
 const String homeRoute = '/home';
-const String expenseListRoute = '/expenses';
 const String addEditExpenseRoute = '/add-edit-expense';
 const String expenseDetailRoute = '/expense-detail';
+const String monthlyAnalyticsRoute = '/monthly-analytics';

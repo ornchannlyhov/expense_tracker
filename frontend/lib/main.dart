@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:frontend/screens/auth/signup_screen.dart';
 import 'package:frontend/screens/expense/add_edit_expense.dart';
 import 'package:frontend/screens/expense/expense_detail.dart';
-import 'package:frontend/screens/expense/expense_list_screen.dart';
+import 'package:frontend/screens/expense/monthly_analytics_screen.dart';
 import 'package:frontend/screens/home_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -18,25 +18,21 @@ import 'screens/auth/login_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/error_screen.dart';
 
-// Add this class to handle theme switching
-class ThemeNotifier extends ChangeNotifier {
+class ThemeNotifier with ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.system;
+  bool get isDarkMode => _themeMode == ThemeMode.dark;
 
   ThemeMode get themeMode => _themeMode;
 
-  void setLightMode() {
-    _themeMode = ThemeMode.light;
+  void toggleTheme() {
+    _themeMode =
+        _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
     notifyListeners();
   }
 
-  void setDarkMode() {
-    _themeMode = ThemeMode.dark;
-    notifyListeners();
-  }
-
-  void setSystemMode() {
-    _themeMode = ThemeMode.system;
-    notifyListeners();
+  bool get systemIsDark {
+    final brightness = WidgetsBinding.instance.window.platformBrightness;
+    return brightness == Brightness.dark;
   }
 }
 
@@ -93,7 +89,7 @@ class MyApp extends StatelessWidget {
               loginRoute: (_) => const LoginScreen(),
               registerRoute: (_) => const RegisterScreen(),
               homeRoute: (_) => const HomeScreen(),
-              expenseListRoute: (_) => const ExpenseListScreen(),
+              monthlyAnalyticsRoute: (_) => const MonthlyAnalyticsScreen(),
             },
             onGenerateRoute: (settings) {
               switch (settings.name) {
