@@ -8,7 +8,6 @@ backend/package-lock.json
 expense_tracker.db
 
 # === Frontend  ===
-frontend
 frontend/.dart_tool/
 frontend/.idea/
 frontend/.packages
