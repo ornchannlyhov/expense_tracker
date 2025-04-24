@@ -5,6 +5,7 @@ backend/dist/
 backend/npm-debug.log
 backend/yarn.lock
 backend/package-lock.json
+expense_tracker.db
 
 # === Frontend  ===
 frontend/.dart_tool/
